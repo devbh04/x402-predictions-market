@@ -56,11 +56,10 @@ export function ReceiveDialog({
   };
 
   const handleConnectWallet = async () => {
-    // Temporarily close dialog for Privy interaction
+    // Close dialog for Privy interaction
     onOpenChange(false);
     await connectWallet();
-    // Reopen dialog after connection
-    setTimeout(() => onOpenChange(true), 500);
+    // Don't reopen - user can manually open it again
   };
 
   const onTransfer = async () => {
@@ -95,7 +94,7 @@ export function ReceiveDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-2xl font-bold text-yellow-400">
             Receive Assets
           </DialogTitle>
@@ -105,7 +104,7 @@ export function ReceiveDialog({
         </DialogHeader>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 p-1 bg-zinc-900 rounded-lg flex-shrink-0">
+        <div className="flex gap-2 p-1 bg-zinc-900 rounded-lg shrink-0">
           <button
             onClick={() => setActiveTab('qr')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${

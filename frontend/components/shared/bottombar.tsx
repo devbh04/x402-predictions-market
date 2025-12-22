@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Home, Search, Wallet, User } from 'lucide-react';
+import { Home, Wallet, User, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, usePathname } from 'next/navigation';
 
 const navItems = [
   { id: 'home', label: 'Home', icon: Home, href: '/' },
-  { id: 'search', label: 'Search', icon: Search, href: '/search' },
+  { id: 'social', label: 'Social', icon: Users, href: '/social' },
   { id: 'wallet', label: 'Wallet', icon: Wallet, href: '/wallet' },
   { id: 'profile', label: 'Profile', icon: User, href: '/profile' },
 ];

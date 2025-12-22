@@ -45,7 +45,7 @@ export default function LoadAssetsPage() {
 
   return (
     <AuthenticatedLayout>
-      <div className="min-h-screen px-6 py-8">
+      <div className="px-6 py-8">
         <h1 className="text-3xl font-bold text-yellow-400 mb-4">
           Load Assets
         </h1>
