@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
 import { useNavigationStore, useFilterStore } from '@/lib/store';
+import HowItWorksDialog from './how-it-works-dialog';
+import { HelpCircle } from 'lucide-react';
 
 const topCategories = [
     { id: 'trending', label: 'Trending', icon: '🔥' },
@@ -39,6 +41,8 @@ export default function Appbar() {
         setTagsByCategories,
     } = useFilterStore();
     
+    const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+    
     const { login } = useLogin({
         onComplete({ user, isNewUser }) {
             console.log('Login successful', { user, isNewUser });
@@ -68,7 +72,7 @@ export default function Appbar() {
         <div className="fixed top-0 left-0 right-0 w-full bg-black border-b border-yellow-500/20 z-10 backdrop-blur-sm">
             {/* Top Bar */}
             <div className="flex items-center justify-between px-6 py-4">
-                {/* Logo */}
+                {/* Logo & How It Works */}
                 <div className="flex items-center gap-3">
                     <img
                         src="/logo-yellow.png"
@@ -76,6 +80,12 @@ export default function Appbar() {
                         className="relative w-28 h-10 object-contain transition-transform duration-300 hover:scale-110 cursor-pointer"
                         onClick={() => router.push('/')}
                     />
+                    <button
+                        onClick={() => setHowItWorksOpen(true)}
+                        className="flex items-center"
+                    >
+                        <HelpCircle className="w-6 h-6 text-yellow-400 group-hover:scale-110 transition-transform" />
+                    </button>
                 </div>
 
                 {/* Auth Buttons */}
@@ -243,6 +253,9 @@ export default function Appbar() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* How It Works Dialog */}
+            <HowItWorksDialog open={howItWorksOpen} onClose={() => setHowItWorksOpen(false)} />
 
             {/* Hide scrollbar */}
             <style jsx>{`

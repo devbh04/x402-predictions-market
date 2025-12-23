@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigationStore, useFilterStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ChevronsUpDown, SlidersHorizontal } from 'lucide-react';
+import { Check, ChevronsUpDown, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -19,6 +19,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { KalshiAPI } from '@/lib/api';
+import { Event } from '@/lib/types';
+import EventCard from '@/components/markets/event-card';
+import EventDetailModal from '@/components/markets/event-detail-modal';
 
 const sortByOptions = ['Trending', 'Volatile', 'New', 'Closing soon', 'Volume', 'Liquidity', '50-50'];
 const timeRangeOptions = ['All', 'Hourly', 'Daily', 'Weekly', 'Monthly', 'Annually'];
@@ -44,8 +48,41 @@ export default function Home() {
   const [sortByOpen, setSortByOpen] = useState(false);
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
   const [marketStatusOpen, setMarketStatusOpen] = useState(false);
+  
+  // Event data state
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   const showFilters = selectedBottomNav === 'explore';
+
+  // Fetch event data whenever category or tags change
+  useEffect(() => {
+    if (selectedBottomNav !== 'explore') return;
+
+    const fetchEvents = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await KalshiAPI.fetchEventData(
+          selectedCategory,
+          selectedTags,
+          sortBy
+        );
+        setEvents(response.events);
+      } catch (err) {
+        console.error('Error fetching events:', err);
+        setError('Failed to load events. Please try again.');
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [selectedCategory, selectedTags, sortBy, selectedBottomNav]);
 
   // Check if any filter is modified from default
   const hasActiveFilters = sortBy !== 'Trending' || timeRange !== 'All' || marketStatus !== 'All markets';
@@ -302,20 +339,63 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      <h1 className="text-3xl font-bold text-yellow-400 mb-4">
-        Welcome to x402PM
-      </h1>
-      <p className="text-white/70 mb-8">
-        Your predictions market platform
-      </p>
-      
-      {/* Temporary content to test scrolling */}
-      {Array.from({ length: 20 }).map((_, i) => (
-        <div key={i} className="mb-4 p-4 bg-zinc-900 rounded-lg border border-zinc-800">
-          <h3 className="text-yellow-400 font-semibold mb-2">Prediction Market {i + 1}</h3>
-          <p className="text-white/60 text-sm">This is a sample prediction market card to test scrolling behavior.</p>
+      {/* Events Section */}
+      {selectedBottomNav === 'explore' && (
+        <div className="space-y-4">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-yellow-400 animate-spin mb-3" />
+              <p className="text-white/60 text-sm">Loading events...</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && events.length === 0 && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
+              <p className="text-white/60">No events found for the selected filters.</p>
+              <p className="text-white/40 text-sm mt-2">Try adjusting your category or tags.</p>
+            </div>
+          )}
+
+          {!loading && !error && events.length > 0 && (
+            <div className="grid grid-cols-1 gap-4">
+              {events.map((event, index) => (
+                <EventCard 
+                  key={event.event_ticker} 
+                  event={event} 
+                  index={index}
+                  onEventClick={setSelectedEvent}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      ))}
+      )}
+
+      {/* Event Detail Modal */}
+      {selectedEvent && (
+        <EventDetailModal 
+          event={selectedEvent} 
+          onClose={() => setSelectedEvent(null)} 
+        />
+      )}
+
+      {/* Other content for non-explore sections */}
+      {selectedBottomNav !== 'explore' && (
+        <>
+          <h1 className="text-3xl font-bold text-yellow-400 mb-4">
+            Welcome to x402PM
+          </h1>
+          <p className="text-white/70 mb-8">
+            Your predictions market platform
+          </p>
+        </>
+      )}
     </div>
   );
 }
