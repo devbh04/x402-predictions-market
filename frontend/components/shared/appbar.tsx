@@ -1,45 +1,66 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy, useLogin, useLogout } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
-import { useNavigationStore } from '@/lib/store';
+import { useNavigationStore, useFilterStore } from '@/lib/store';
 
-const categories = [
+const topCategories = [
     { id: 'trending', label: 'Trending', icon: '🔥' },
     { id: 'new', label: 'New', icon: '✨' },
     { id: 'all', label: 'All', icon: '📋' },
-    { id: 'political', label: 'Political', icon: '🏛️' },
-    { id: 'sports', label: 'Sports', icon: '⚽' },
-    { id: 'culture', label: 'Culture', icon: '🎭' },
-    { id: 'crypto', label: 'Crypto', icon: '₿' },
-    { id: 'forex', label: 'Forex', icon: '💱' },
-    { id: 'finance', label: 'Finance', icon: '📈' },
-    { id: 'climate', label: 'Climate', icon: '🌍' },
-    { id: 'trump', label: 'Trump', icon: '🧑‍💼' },
-    { id: 'geopolitics', label: 'Geopolitics', icon: '🌐' },
-    { id: 'economics', label: 'Economics', icon: '💹' },
-    { id: 'science', label: 'Science', icon: '🔬' },
-    { id: 'billionaire', label: 'Billionaire', icon: '🤑' },
-    { id: 'health', label: 'Health', icon: '⚕️' },
-    { id: 'world', label: 'World', icon: '🌍' },
+];
+
+const allCategories = [
+    'Climate and Weather',
+    'Companies',
+    'Crypto',
+    'Economics',
+    'Entertainment',
+    'Financials',
+    'Health',
+    'Politics',
+    'Science and Technology',
+    'Sports',
+    'Transportation',
+    'World'
 ];
 
 export default function Appbar() {
-    const [selectedCategory, setSelectedCategory] = useState('trending');
     const router = useRouter();
     const { ready, authenticated, user } = usePrivy();
     const { logout } = useLogout();
     const { selectedBottomNav } = useNavigationStore();
+    const {
+        selectedCategory,
+        setSelectedCategory,
+        setTagsByCategories,
+    } = useFilterStore();
+    
     const { login } = useLogin({
         onComplete({ user, isNewUser }) {
             console.log('Login successful', { user, isNewUser });
             // Don't auto-redirect, let users stay on current page
         },
     });
+
+    useEffect(() => {
+        // Fetch tags from API
+        const fetchTags = async () => {
+            try {
+                const response = await fetch('https://api.elections.kalshi.com/trade-api/v2/search/tags_by_categories');
+                const data = await response.json();
+                if (data.tags_by_categories) {
+                    setTagsByCategories(data.tags_by_categories);
+                }
+            } catch (error) {
+                console.error('Failed to fetch tags:', error);
+            }
+        };
+        fetchTags();
+    }, [setTagsByCategories]);
 
     const showCategories = selectedBottomNav === 'explore';
 
@@ -118,7 +139,7 @@ export default function Appbar() {
                             className="overflow-x-auto scrollbar-hide"
                         >
                             <div className="flex items-center gap-2 px-4 pb-4">
-                                {categories.map((category, index) => (
+                                {topCategories.map((category, index) => (
                                     <motion.button
                                         key={category.id}
                                         initial={{ opacity: 0, y: -20 }}
@@ -137,7 +158,7 @@ export default function Appbar() {
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => setSelectedCategory(category.id)}
                                         className={`
-                                            group relative flex items-center gap-2 px-4 py-1 rounded-lg
+                                            group relative flex items-center px-4 py-1 rounded-lg
                                             whitespace-nowrap
                                             ${selectedCategory === category.id
                                                 ? 'font-serif text-white shadow-sm shadow-yellow-400/30'
@@ -145,28 +166,65 @@ export default function Appbar() {
                                             }
                                         `}
                                     >
-                                        <AnimatePresence mode="popLayout">
-                                            {selectedCategory === category.id && (
-                                                <motion.span
-                                                    initial={{ scale: 0, opacity: 0, width: 0 }}
-                                                    animate={{ scale: 1, opacity: 1, width: 'auto' }}
-                                                    exit={{ scale: 0, opacity: 0, width: 0 }}
-                                                    transition={{
-                                                        duration: 0.4,
-                                                        ease: [0.23, 1, 0.32, 1]
-                                                    }}
-                                                    className="text-sm"
-                                                >
-                                                    {category.icon}
-                                                </motion.span>
-                                            )}
-                                        </AnimatePresence>
+                                        <motion.span className="text-sm">
+                                            {category.icon}
+                                        </motion.span>
                                         
                                         <span className="text-sm font-medium">
                                             {category.label}
                                         </span>
 
                                         {selectedCategory === category.id && (
+                                            <motion.div
+                                                layoutId="categoryIndicator"
+                                                className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-yellow-400 rounded-full"
+                                                transition={{
+                                                    type: "spring",
+                                                    stiffness: 380,
+                                                    damping: 30,
+                                                    mass: 0.8
+                                                }}
+                                            />
+                                        )}
+                                    </motion.button>
+                                ))}
+                                
+                                {/* Separator */}
+                                <div className="w-px h-6" />
+                                
+                                {/* All other categories */}
+                                {allCategories.map((category, index) => (
+                                    <motion.button
+                                        key={category}
+                                        initial={{ opacity: 0, y: -20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        layout
+                                        transition={{
+                                            duration: 0.4,
+                                            delay: (topCategories.length + index) * 0.05,
+                                            ease: [0.23, 1, 0.32, 1],
+                                            layout: { duration: 0.4, ease: [0.23, 1, 0.32, 1] }
+                                        }}
+                                        whileHover={{ 
+                                            scale: 1.05,
+                                            transition: { duration: 0.2, ease: [0.23, 1, 0.32, 1] }
+                                        }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => setSelectedCategory(category)}
+                                        className={`
+                                            group relative flex items-center gap-2 px-4 py-1 rounded-lg
+                                            whitespace-nowrap
+                                            ${selectedCategory === category
+                                                ? 'font-serif text-white shadow-sm shadow-yellow-400/30'
+                                                : 'bg-black text-white hover:bg-zinc-800'
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-sm font-medium">
+                                            {category}
+                                        </span>
+
+                                        {selectedCategory === category && (
                                             <motion.div
                                                 layoutId="categoryIndicator"
                                                 className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-yellow-400 rounded-full"
