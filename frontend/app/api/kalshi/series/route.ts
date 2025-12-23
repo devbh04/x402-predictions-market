@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+const BASE_URL = 'https://api.elections.kalshi.com/trade-api/v2';
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const category = searchParams.get('category');
+  const tags = searchParams.get('tags');
+
+  const params = new URLSearchParams();
+  if (category) params.append('category', category);
+  if (tags) params.append('tags', tags);
+
+  try {
+    const response = await fetch(`${BASE_URL}/series?${params.toString()}`, {
+      headers: {
+        "Accept": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: 'Failed to fetch series' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error fetching series:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

@@ -1,6 +1,6 @@
 import { MarketsResponse, SeriesResponse, EventsResponse } from './types';
 
-const BASE_URL = 'https://api.elections.kalshi.com/trade-api/v2';
+const BASE_URL = '/api/kalshi';
 
 export class KalshiAPI {
   // Fetch series based on category and tags
@@ -10,9 +10,6 @@ export class KalshiAPI {
     if (tags && tags.length > 0) params.append('tags', tags.join(','));
     
     const response = await fetch(`${BASE_URL}/series?${params.toString()}`, {
-      headers: {
-        "Accept": "application/json",
-      },
       cache: "no-store",
     });
     if (!response.ok) throw new Error('Failed to fetch series');
@@ -33,9 +30,6 @@ export class KalshiAPI {
     if (params.cursor) searchParams.append('cursor', params.cursor);
     
     const response = await fetch(`${BASE_URL}/markets?${searchParams.toString()}`, {
-      headers: {
-        "Accept": "application/json",
-      },
       cache: "no-store",
     });
     if (!response.ok) throw new Error('Failed to fetch markets');
@@ -58,9 +52,6 @@ export class KalshiAPI {
     if (params.cursor) searchParams.append('cursor', params.cursor);
     
     const response = await fetch(`${BASE_URL}/events?${searchParams.toString()}`, {
-      headers: {
-        "Accept": "application/json",
-      },
       cache: "no-store",
     });
     if (!response.ok) throw new Error('Failed to fetch events');
