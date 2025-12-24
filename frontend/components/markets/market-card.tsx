@@ -1,202 +1,361 @@
 'use client';
 
-import { Market } from '@/lib/types';
-import { motion } from 'framer-motion';
-import { TrendingUp, Clock, Users, ReceiptIcon } from 'lucide-react';
+import { Market, EventMetadata, OrderbookResponse } from '@/lib/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TrendingUp, Clock, Users, ReceiptIcon, ChevronDown } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { KalshiAPI } from '@/lib/api';
+import SingleMarketChart from './single-market-chart';
+import OrderbookYes from './orderbook-yes';
+import OrderbookNo from './orderbook-no';
 
 interface MarketCardProps {
-  market: Market;
-  index: number;
+    market: Market;
+    index: number;
+    metadata?: EventMetadata | null;
 }
 
-export default function MarketCard({ market, index }: MarketCardProps) {
-  // Calculate price percentage
-  const yesPrice = market.last_price || market.yes_bid || 50;
-  const noPrice = 100 - yesPrice;
-  
-  // Format close time
-  const closeDate = new Date(market.close_time);
-  const now = new Date();
-  const daysUntilClose = Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  // Format date for display
-  const formatCloseDate = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      month: 'short', 
-      day: 'numeric', 
-      year: closeDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-      hour: 'numeric',
-      minute: '2-digit'
+export default function MarketCard({ market, index, metadata }: MarketCardProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [viewMode, setViewMode] = useState<'chart' | 'yes' | 'no'>('chart');
+    const [orderbook, setOrderbook] = useState<OrderbookResponse | null>(null);
+    const [loadingOrderbook, setLoadingOrderbook] = useState(false);
+    
+    // Calculate price percentage
+    const yesPrice = market.last_price || market.yes_bid || 50;
+    const noPrice = 100 - yesPrice;
+
+    // Fetch orderbook when expanded
+    useEffect(() => {
+        if (isExpanded && !orderbook && (viewMode === 'yes' || viewMode === 'no')) {
+            setLoadingOrderbook(true);
+            KalshiAPI.getOrderbook(market.ticker, 50)
+                .then(data => setOrderbook(data))
+                .catch(err => console.error('Error fetching orderbook:', err))
+                .finally(() => setLoadingOrderbook(false));
+        }
+    }, [isExpanded, market.ticker, viewMode]);
+
+    // Format close time
+    const closeDate = new Date(market.close_time);
+    const now = new Date();
+    const daysUntilClose = Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Format date for display
+    const formatCloseDate = () => {
+        const options: Intl.DateTimeFormatOptions = {
+            month: 'short',
+            day: 'numeric',
+            year: closeDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+            hour: 'numeric',
+            minute: '2-digit'
+        };
+        return closeDate.toLocaleDateString('en-US', options);
     };
-    return closeDate.toLocaleDateString('en-US', options);
-  };
-  
-  // Format volume
-  const formatVolume = (volume?: number) => {
-    if (!volume) return '$0';
-    if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
-    if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}K`;
-    return `$${volume}`;
-  };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.4,
-        delay: index * 0.05,
-        ease: [0.23, 1, 0.32, 1]
-      }}
-      whileHover={{ 
-        scale: 1.02,
-        transition: { duration: 0.2 }
-      }}
-      className="group relative bg-zinc-900 rounded-xl border border-zinc-800 hover:border-yellow-400/30 p-5 transition-all cursor-pointer overflow-hidden"
-    >
-      {/* Gradient overlay on hover */}
-      <div className="absolute inset-0 bg-linear-to-br from-yellow-400/0 to-yellow-400/0 group-hover:from-yellow-400/5 group-hover:to-transparent transition-all duration-300" />
-      
-      <div className="relative space-y-4">
-        {/* Header */}
-        <div className="space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-white font-semibold text-base leading-tight line-clamp-2 flex-1">
-              {market.title}
-            </h3>
-            {market.category && (
-              <span className="shrink-0 px-2 py-1 text-xs bg-yellow-400/10 text-yellow-400 rounded-md border border-yellow-400/20">
-                {market.category}
-              </span>
-            )}
-          </div>
-          
-          {market.subtitle && (
-            <p className="text-white/50 text-sm line-clamp-1">
-              {market.subtitle}
-            </p>
-          )}
-        </div>
+    // Format volume
+    const formatVolume = (volume?: number) => {
+        if (!volume) return '$0';
+        if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
+        if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}K`;
+        return `$${volume}`;
+    };
 
-        {/* Price Display */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="relative bg-linear-to-br from-green-500/10 to-green-500/5 border border-green-500/30 rounded-xl p-4 space-y-2 hover:border-green-500/50 transition-all group">
-            <div className="flex items-center justify-between">
-              <div className="text-green-400 text-xs font-semibold uppercase tracking-wide">YES</div>
-              {market.yes_bid !== undefined && market.yes_ask !== undefined && (
-                <div className="text-green-400/60 text-[10px]">
-                  Bid/Ask
+    // Get market image from metadata
+    const marketDetail = metadata?.market_details?.find(
+        detail => detail.market_ticker === market.ticker
+    );
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+                duration: 0.4,
+                delay: index * 0.05,
+                ease: [0.23, 1, 0.32, 1]
+            }}
+            className="group relative bg-zinc-900 rounded-xl border border-zinc-800 hover:border-yellow-400/30 transition-all overflow-hidden"
+        >
+            <div 
+                onClick={() => !isExpanded && setIsExpanded(true)}
+                className={isExpanded ? "p-4" : "p-4 cursor-pointer"}
+            >
+                <div className="space-y-3">
+                    {/* Title and Image */}
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1">
+                            {marketDetail?.image_url && (
+                                <img
+                                    src={marketDetail.image_url}
+                                    alt={market.title}
+                                    className="w-10 h-10 object-contain shrink-0"
+                                />
+                            )}
+                            <h3 className="text-white font-semibold text-sm leading-tight line-clamp-2 flex-1">
+                                {market.title}
+                            </h3>
+                        </div>
+                        <motion.div
+                            onClick={(e) => {
+                                if (isExpanded) {
+                                    e.stopPropagation();
+                                    setIsExpanded(false);
+                                }
+                            }}
+                            animate={{ rotate: isExpanded ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                            className={isExpanded ? "cursor-pointer" : ""}
+                        >
+                            <ChevronDown className="w-5 h-5 text-white/40" />
+                        </motion.div>
+                    </div>
+
+                    {/* Custom Strike */}
+                    {market.custom_strike && Object.keys(market.custom_strike).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {Object.entries(market.custom_strike).map(([key, value]) => (
+                                <span key={key} className="text-yellow-400 text-xs">
+                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Subtitle when expanded */}
+                    <AnimatePresence>
+                        {isExpanded && market.subtitle && (
+                            <motion.p
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="text-white/50 text-sm overflow-hidden"
+                            >
+                                {market.subtitle}
+                            </motion.p>
+                        )}
+                    </AnimatePresence>
+
+                    {/* YES/NO Buttons - Expandable */}
+                    <div className="grid grid-cols-2 gap-3">
+                        {/* YES Section */}
+                        <motion.div 
+                            animate={{ 
+                                paddingTop: isExpanded ? '12px' : '12px',
+                                paddingBottom: isExpanded ? '12px' : '12px'
+                            }}
+                            className="bg-green-500/10 border border-green-500/30 rounded-lg px-3"
+                        >
+                            <div className="text-center">
+                                <div className="text-green-400 text-xs font-semibold uppercase mb-1">YES</div>
+                                <div className="text-white text-2xl font-bold mb-1">{yesPrice}%</div>
+                                
+                                <AnimatePresence>
+                                    {isExpanded && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="overflow-hidden space-y-2 pt-2 border-t border-green-500/20"
+                                        >
+                                            <div className="text-white/40 text-xs">{yesPrice}¢ per share</div>
+                                            
+                                            {market.yes_sub_title && (
+                                                <div className="px-2 py-1 rounded bg-zinc-950 border border-green-500/40">
+                                                    <p className="text-green-400/90 text-xs leading-tight">{market.yes_sub_title}</p>
+                                                </div>
+                                            )}
+                                            
+                                            {market.yes_bid !== undefined && market.yes_ask !== undefined && (
+                                                <div className="space-y-1">
+                                                    <div className="text-green-400/60 text-[10px] uppercase">Bid/Ask</div>
+                                                    <div className="flex items-center justify-center gap-1 text-xs">
+                                                        <span className="px-2 py-0.5 bg-green-500/10 rounded text-green-400">{market.yes_bid}¢</span>
+                                                        <span className="text-white/30">|</span>
+                                                        <span className="px-2 py-0.5 bg-green-500/10 rounded text-green-400">{market.yes_ask}¢</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
+
+                        {/* NO Section */}
+                        <motion.div 
+                            animate={{ 
+                                paddingTop: isExpanded ? '12px' : '12px',
+                                paddingBottom: isExpanded ? '12px' : '12px'
+                            }}
+                            className="bg-red-500/10 border border-red-500/30 rounded-lg px-3"
+                        >
+                            <div className="text-center">
+                                <div className="text-red-400 text-xs font-semibold uppercase mb-1">NO</div>
+                                <div className="text-white text-2xl font-bold mb-1">{noPrice}%</div>
+                                
+                                <AnimatePresence>
+                                    {isExpanded && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="overflow-hidden space-y-2 pt-2 border-t border-red-500/20"
+                                        >
+                                            <div className="text-white/40 text-xs">{noPrice}¢ per share</div>
+                                            
+                                            {market.no_sub_title && (
+                                                <div className="px-2 py-1 rounded bg-zinc-950 border border-red-500/40">
+                                                    <p className="text-red-400/90 text-xs leading-tight">{market.no_sub_title}</p>
+                                                </div>
+                                            )}
+                                            
+                                            {market.no_bid !== undefined && market.no_ask !== undefined && (
+                                                <div className="space-y-1">
+                                                    <div className="text-red-400/60 text-[10px] uppercase">Bid/Ask</div>
+                                                    <div className="flex items-center justify-center gap-1 text-xs">
+                                                        <span className="px-2 py-0.5 bg-red-500/10 rounded text-red-400">{market.no_bid}¢</span>
+                                                        <span className="text-white/30">|</span>
+                                                        <span className="px-2 py-0.5 bg-red-500/10 rounded text-red-400">{market.no_ask}¢</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* Stats - Only shown when expanded */}
+                    <AnimatePresence>
+                        {isExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden space-y-3 pt-3 border-t border-zinc-800"
+                            >
+                                {/* Toggle between Chart/YES/NO */}
+                                <div className="flex gap-2 p-1 bg-zinc-800 rounded-lg">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setViewMode('chart');
+                                        }}
+                                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                            viewMode === 'chart'
+                                                ? 'bg-yellow-400 text-black'
+                                                : 'text-white/60 hover:text-white'
+                                        }`}
+                                    >
+                                        Probability
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setViewMode('yes');
+                                        }}
+                                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                            viewMode === 'yes'
+                                                ? 'bg-green-400 text-black'
+                                                : 'text-white/60 hover:text-white'
+                                        }`}
+                                    >
+                                        YES Book
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setViewMode('no');
+                                        }}
+                                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                            viewMode === 'no'
+                                                ? 'bg-red-400 text-black'
+                                                : 'text-white/60 hover:text-white'
+                                        }`}
+                                    >
+                                        NO Book
+                                    </button>
+                                </div>
+
+                                {/* Content Area */}
+                                <div className="min-h-50">
+                                    {viewMode === 'chart' && (
+                                        <SingleMarketChart market={market} />
+                                    )}
+
+                                    {viewMode === 'yes' && (
+                                        <div>
+                                            {loadingOrderbook ? (
+                                                <div className="flex items-center justify-center py-12">
+                                                    <div className="w-5 h-5 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                                                </div>
+                                            ) : orderbook?.orderbook?.yes ? (
+                                                <OrderbookYes 
+                                                    yesOrders={orderbook.orderbook.yes}
+                                                    noOrders={orderbook.orderbook.no}
+                                                    lastPrice={yesPrice}
+                                                />
+                                            ) : (
+                                                <div className="text-center py-12 text-white/40 text-sm">No YES orders</div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {viewMode === 'no' && (
+                                        <div>
+                                            {loadingOrderbook ? (
+                                                <div className="flex items-center justify-center py-12">
+                                                    <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                </div>
+                                            ) : orderbook?.orderbook?.no ? (
+                                                <OrderbookNo 
+                                                    noOrders={orderbook.orderbook.no}
+                                                    yesOrders={orderbook.orderbook.yes}
+                                                    lastPrice={noPrice}
+                                                />
+                                            ) : (
+                                                <div className="text-center py-12 text-white/40 text-sm">No NO orders</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="flex flex-col items-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
+                                        <span className="text-yellow-400/50 text-[10px] uppercase">Volume</span>
+                                        <span className="text-white text-xs font-semibold">
+                                            {formatVolume(market.volume || market.volume)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col items-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
+                                        <span className="text-blue-400/50 text-[10px] uppercase">Open Int.</span>
+                                        <span className="text-white text-xs font-semibold">
+                                            {market.open_interest > 0 ? market.open_interest : '0'}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col items-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
+                                        <span className="text-green-400/50 text-[10px] uppercase">Interest</span>
+                                        <span className="text-white text-xs font-semibold">
+                                            {formatVolume(market.open_interest)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-center text-white/50 text-xs">
+                                    Closes: <span className="text-white/70 font-medium ml-1">{formatCloseDate()}</span>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
-              )}
             </div>
-            <div className="text-white text-3xl font-bold">{yesPrice}%</div>
-            <div className="text-white/40 text-xs">{yesPrice}¢ per share</div>
-            {market.yes_sub_title && (
-              <div className="pt-2 border-t border-green-500/20">
-                <p className="text-green-400/90 text-xs leading-relaxed line-clamp-2">{market.yes_sub_title}</p>
-              </div>
-            )}
-            {market.yes_bid !== undefined && market.yes_ask !== undefined && (
-              <div className="flex items-center gap-2 text-white/70 text-xs">
-                <span className="px-1.5 py-0.5 bg-green-500/10 rounded text-green-400">{market.yes_bid}¢</span>
-                <span className="text-white/50">/</span>
-                <span className="px-1.5 py-0.5 bg-green-500/10 rounded text-green-400">{market.yes_ask}¢</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="relative bg-linear-to-br from-red-500/10 to-red-500/5 border border-red-500/30 rounded-xl p-4 space-y-2 hover:border-red-500/50 transition-all group">
-            <div className="flex items-center justify-between">
-              <div className="text-red-400 text-xs font-semibold uppercase tracking-wide">NO</div>
-              {market.no_bid !== undefined && market.no_ask !== undefined && (
-                <div className="text-red-400/60 text-[10px]">
-                    Bid/Ask
-                </div>
-              )}
-            </div>
-            <div className="text-white text-3xl font-bold">{noPrice}%</div>
-            <div className="text-white/40 text-xs">{noPrice}¢ per share</div>
-            {market.no_sub_title && (
-              <div className="pt-2 border-t border-red-500/20">
-                <p className="text-red-400/90 text-xs leading-relaxed line-clamp-2">{market.no_sub_title}</p>
-              </div>
-            )}
-            {market.no_bid !== undefined && market.no_ask !== undefined && (
-              <div className="flex items-center gap-2 text-white/70 text-xs">
-                <span className="px-1.5 py-0.5 bg-red-500/10 rounded text-red-400">{market.no_bid}¢</span>
-                <span className="text-white/50">/</span>
-                <span className="px-1.5 py-0.5 bg-red-500/10 rounded text-red-400">{market.no_ask}¢</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800">
-          <div className="flex flex-col items-center justify-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4 text-yellow-400" />
-              <span className="text-white/50 text-[10px] uppercase">Volume</span>
-            </div>
-            <span className="text-white text-xs font-semibold">
-              {formatVolume(market.volume || market.volume)}
-            </span>
-          </div>
-          
-          <div className="flex flex-col items-center justify-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
-            <div className="flex items-center gap-1">
-              <ReceiptIcon className="w-4 h-4 text-blue-400" />
-              <span className="text-white/50 text-[10px] text-center leading-tight uppercase">Open-Interest</span>
-            </div>
-            <span className="text-white text-xs font-semibold text-center leading-tight">
-              {market.open_interest > 0 ? (
-                market.open_interest
-              ) : '0'}
-            </span>
-          </div>
-          
-          <div className="flex flex-col items-center justify-center gap-1 py-2 px-2 bg-zinc-800/50 rounded-lg">
-            <div className="flex items-center gap-1">
-              <Users className="w-4 h-4 text-green-400" />
-              <span className="text-white/50 text-[10px] uppercase">Interest</span>
-            </div>
-            <span className="text-white text-xs font-semibold">
-              {formatVolume(market.open_interest)}
-            </span>
-          </div>
-        </div>
-        
-        {/* Custom Strike Details */}
-        {market.custom_strike && Object.keys(market.custom_strike).length > 0 && (
-          <div className="pt-2 border-t border-zinc-800">
-            <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-lg p-3 space-y-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wide">Strike Conditions</span>
-              </div>
-              <div className="space-y-1.5">
-                {Object.entries(market.custom_strike).map(([key, value]) => (
-                  <div key={key} className="flex items-start justify-between gap-3 text-xs">
-                    <span className="text-white/60 font-medium capitalize">
-                      {key.replace(/_/g, ' ')}:
-                    </span>
-                    <span className="text-white/90 font-semibold text-right">
-                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Close Date Detail */}
-        <div className="flex items-center justify-center gap-2 pt-2 pb-1">
-          <div className="text-white/50 text-xs">
-            Market closes: <span className="text-white/70 font-medium">{formatCloseDate()}</span>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
+        </motion.div>
+    );
 }

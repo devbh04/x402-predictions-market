@@ -63,3 +63,71 @@ export interface EventsResponse {
   events: Event[];
   cursor?: string;
 }
+
+export interface MarketDetail {
+  market_ticker: string;
+  image_url?: string;
+  color_code?: string;
+}
+
+export interface SettlementSource {
+  name: string;
+  url: string;
+}
+
+export interface EventMetadata {
+  image_url?: string;
+  market_details?: MarketDetail[];
+  settlement_sources?: SettlementSource[];
+  featured_image_url?: string;
+  competition?: string;
+  competition_scope?: string;
+}
+
+export interface PriceData {
+  open: number;
+  open_dollars: string;
+  low: number;
+  low_dollars: string;
+  high: number;
+  high_dollars: string;
+  close: number;
+  close_dollars: string;
+  mean?: number;
+  mean_dollars?: string;
+  previous?: number;
+  previous_dollars?: string;
+  min?: number;
+  min_dollars?: string;
+  max?: number;
+  max_dollars?: string;
+}
+
+export interface Candlestick {
+  end_period_ts: number;
+  yes_bid: PriceData;
+  yes_ask: PriceData;
+  price: PriceData;
+  volume: number;
+  open_interest: number;
+}
+
+export interface MarketCandlesticks {
+  market_ticker: string;
+  candlesticks: Candlestick[];
+}
+
+export interface CandlesticksResponse {
+  markets: MarketCandlesticks[];
+}
+
+export interface Orderbook {
+  yes: number[][];
+  no: number[][];
+  yes_dollars: [string, number][];
+  no_dollars: [string, number][];
+}
+
+export interface OrderbookResponse {
+  orderbook: Orderbook;
+}

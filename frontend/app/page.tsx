@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useNavigationStore, useFilterStore } from '@/lib/store';
+import { useNavigationStore, useFilterStore, useMetadataStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronsUpDown, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { KalshiAPI } from '@/lib/api';
 import { Event } from '@/lib/types';
 import EventCard from '@/components/markets/event-card';
-import EventDetailModal from '@/components/markets/event-detail-modal';
 
 const sortByOptions = ['Trending', 'Volatile', 'New', 'Closing soon', 'Volume', 'Liquidity', '50-50'];
 const timeRangeOptions = ['All', 'Hourly', 'Daily', 'Weekly', 'Monthly', 'Annually'];
@@ -53,9 +52,89 @@ export default function Home() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const { setMetadata, getMetadata, setLoading: setMetadataLoading, isLoading: isMetadataLoading } = useMetadataStore();
 
   const showFilters = selectedBottomNav === 'explore';
+
+  // Batch fetch metadata for events
+  const fetchMetadataBatch = async (eventTickers: string[]) => {
+    const BATCH_SIZE = 10;
+    const batches = [];
+    
+    for (let i = 0; i < eventTickers.length; i += BATCH_SIZE) {
+      batches.push(eventTickers.slice(i, i + BATCH_SIZE));
+    }
+
+    for (const batch of batches) {
+      await Promise.all(
+        batch.map(async (eventTicker) => {
+          // Skip if already loaded or loading
+          if (getMetadata(eventTicker) || isMetadataLoading(eventTicker)) return;
+          
+          setMetadataLoading(eventTicker, true);
+          try {
+            const metadata = await KalshiAPI.getEventMetadata(eventTicker);
+            if (metadata) {
+              setMetadata(eventTicker, metadata);
+            }
+          } catch (error) {
+            // Silently fail - metadata is optional
+            console.debug(`Metadata not available for ${eventTicker}`);
+          } finally {
+            setMetadataLoading(eventTicker, false);
+          }
+        })
+      );
+      // Small delay between batches to avoid overwhelming the API
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  };
+
+  // Sort events based on selected sort option
+  const sortEvents = (eventsToSort: Event[]) => {
+    const sorted = [...eventsToSort];
+    
+    switch (sortBy) {
+      case 'Volume':
+        return sorted.sort((a, b) => {
+          const aVolume = a.markets?.reduce((sum, m) => sum + (m.volume || 0), 0) || 0;
+          const bVolume = b.markets?.reduce((sum, m) => sum + (m.volume || 0), 0) || 0;
+          return bVolume - aVolume;
+        });
+      case 'Liquidity':
+        return sorted.sort((a, b) => {
+          const aLiquidity = a.markets?.reduce((sum, m) => sum + (m.open_interest || 0), 0) || 0;
+          const bLiquidity = b.markets?.reduce((sum, m) => sum + (m.open_interest || 0), 0) || 0;
+          return bLiquidity - aLiquidity;
+        });
+      case 'Closing soon':
+        return sorted.sort((a, b) => {
+          const aClose = Math.min(...(a.markets?.map(m => new Date(m.close_time).getTime()) || [Infinity]));
+          const bClose = Math.min(...(b.markets?.map(m => new Date(m.close_time).getTime()) || [Infinity]));
+          return aClose - bClose;
+        });
+      case 'New':
+        return sorted.sort((a, b) => {
+          const aOpen = Math.min(...(a.markets?.map(m => new Date(m.open_time || 0).getTime()) || [0]));
+          const bOpen = Math.min(...(b.markets?.map(m => new Date(m.open_time || 0).getTime()) || [0]));
+          return bOpen - aOpen;
+        });
+      case '50-50':
+        return sorted.sort((a, b) => {
+          const aClosest = Math.min(...(a.markets?.map(m => Math.abs((m.last_price || m.yes_bid || 50) - 50)) || [Infinity]));
+          const bClosest = Math.min(...(b.markets?.map(m => Math.abs((m.last_price || m.yes_bid || 50) - 50)) || [Infinity]));
+          return aClosest - bClosest;
+        });
+      case 'Volatile':
+      case 'Trending':
+      default:
+        return sorted;
+    }
+  };
 
   // Fetch event data whenever category or tags change
   useEffect(() => {
@@ -64,6 +143,8 @@ export default function Home() {
     const fetchEvents = async () => {
       setLoading(true);
       setError(null);
+      setCursor(undefined);
+      setHasMore(true);
       
       try {
         const response = await KalshiAPI.fetchEventData(
@@ -71,7 +152,14 @@ export default function Home() {
           selectedTags,
           sortBy
         );
-        setEvents(response.events);
+        const sortedEvents = sortEvents(response.events);
+        setEvents(sortedEvents);
+        setCursor(response.cursor);
+        setHasMore(!!response.cursor);
+        
+        // Fetch metadata for visible events
+        const eventTickers = sortedEvents.map(e => e.event_ticker);
+        fetchMetadataBatch(eventTickers);
       } catch (err) {
         console.error('Error fetching events:', err);
         setError('Failed to load events. Please try again.');
@@ -82,10 +170,68 @@ export default function Home() {
     };
 
     fetchEvents();
-  }, [selectedCategory, selectedTags, sortBy, selectedBottomNav]);
+  }, [selectedCategory, selectedTags, selectedBottomNav]);
+
+  // Re-sort when sortBy changes
+  useEffect(() => {
+    if (events.length > 0) {
+      setEvents(sortEvents(events));
+    }
+  }, [sortBy]);
+
+  // Load more events
+  const loadMoreEvents = async () => {
+    if (!hasMore || loadingMore || loading) return;
+
+    setLoadingMore(true);
+    try {
+      const response = await KalshiAPI.getEvents({
+        limit: 100,
+        status: 'open',
+        with_nested_markets: true,
+        cursor: cursor,
+      });
+      
+      const sortedNewEvents = sortEvents(response.events);
+      // Filter out duplicates based on event_ticker
+      setEvents(prev => {
+        const existingTickers = new Set(prev.map(e => e.event_ticker));
+        const uniqueNewEvents = sortedNewEvents.filter(e => !existingTickers.has(e.event_ticker));
+        return [...prev, ...uniqueNewEvents];
+      });
+      setCursor(response.cursor);
+      setHasMore(!!response.cursor);
+      
+      // Fetch metadata for new events
+      const eventTickers = sortedNewEvents.map(e => e.event_ticker);
+      fetchMetadataBatch(eventTickers);
+    } catch (err) {
+      console.error('Error loading more events:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Infinite scroll handler
+  useEffect(() => {
+    if (selectedBottomNav !== 'explore') return;
+
+    const handleScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+
+      if (scrollTop + clientHeight >= scrollHeight - 500 && !loadingMore && hasMore) {
+        loadMoreEvents();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [selectedBottomNav, loadingMore, hasMore, cursor]);
 
   // Check if any filter is modified from default
-  const hasActiveFilters = sortBy !== 'Trending' || timeRange !== 'All' || marketStatus !== 'All markets';
+  const hasActiveFilters = sortBy !== 'Volume' || timeRange !== 'All' || marketStatus !== 'All markets';
 
   // Get tags for the selected category
   const getTagsForCategory = () => {
@@ -199,7 +345,7 @@ export default function Home() {
                   }}
                   className="overflow-hidden"
                 >
-                  <div className="flex gap-2 justify-center">
+                  <div className="flex gap-2 justify-center px-2">
                     {/* Sort By Combobox */}
                     <Popover open={sortByOpen} onOpenChange={setSortByOpen}>
                       <PopoverTrigger asChild>
@@ -363,26 +509,32 @@ export default function Home() {
           )}
 
           {!loading && !error && events.length > 0 && (
-            <div className="grid grid-cols-1 gap-4">
-              {events.map((event, index) => (
-                <EventCard 
-                  key={event.event_ticker} 
-                  event={event} 
-                  index={index}
-                  onEventClick={setSelectedEvent}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4">
+                {events.map((event, index) => (
+                  <EventCard 
+                    key={event.event_ticker} 
+                    event={event} 
+                    index={index}
+                  />
+                ))}
+              </div>
+              
+              {loadingMore && (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-yellow-400 animate-spin mb-2" />
+                  <p className="text-white/60 text-xs">Loading more events...</p>
+                </div>
+              )}
+              
+              {!hasMore && events.length > 0 && (
+                <div className="text-center py-8">
+                  <p className="text-white/40 text-sm">No more events to load</p>
+                </div>
+              )}
+            </>
           )}
         </div>
-      )}
-
-      {/* Event Detail Modal */}
-      {selectedEvent && (
-        <EventDetailModal 
-          event={selectedEvent} 
-          onClose={() => setSelectedEvent(null)} 
-        />
       )}
 
       {/* Other content for non-explore sections */}

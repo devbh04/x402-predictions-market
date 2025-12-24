@@ -1,4 +1,4 @@
-import { MarketsResponse, SeriesResponse, EventsResponse } from './types';
+import { MarketsResponse, SeriesResponse, EventsResponse, EventMetadata } from './types';
 
 const BASE_URL = '/api/kalshi';
 
@@ -67,7 +67,7 @@ export class KalshiAPI {
     // For special categories (trending, all, new), fetch events directly
     if (category === 'trending' || category === 'all' || category === 'new') {
       return this.getEvents({ 
-        limit: 25,
+        limit: 100,
         status: 'open',
         with_nested_markets: true
       });
@@ -81,8 +81,8 @@ export class KalshiAPI {
         return { events: [] };
       }
 
-      // Get first 25 series tickers
-      const seriesTickers = seriesResponse.series.slice(0, 25).map(s => s.ticker);
+      // Get first 100 series tickers
+      const seriesTickers = seriesResponse.series.slice(0, 100).map(s => s.ticker);
       
       // Fetch events for each series ticker and combine
       const allEvents: EventsResponse = { events: [] };
@@ -90,16 +90,16 @@ export class KalshiAPI {
       for (const ticker of seriesTickers) {
         const eventsResponse = await this.getEvents({
           series_ticker: ticker,
-          limit: 25,
+          limit: 100,
           status: 'open',
           with_nested_markets: true
         });
         
         allEvents.events.push(...eventsResponse.events);
         
-        // Limit total events to 25
-        if (allEvents.events.length >= 25) {
-          allEvents.events = allEvents.events.slice(0, 25);
+        // Limit total events to 100
+        if (allEvents.events.length >= 100) {
+          allEvents.events = allEvents.events.slice(0, 100);
           break;
         }
       }
@@ -109,5 +109,63 @@ export class KalshiAPI {
       console.error('Error fetching event data:', error);
       return { events: [] };
     }
+  }
+
+  // Fetch event metadata
+  static async getEventMetadata(eventTicker: string): Promise<EventMetadata | null> {
+    try {
+      const response = await fetch(`${BASE_URL}/events/${eventTicker}/metadata`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        // Return null for 404 or other errors instead of throwing
+        if (response.status === 404) {
+          console.warn(`Metadata not available for ${eventTicker}`);
+        }
+        return null;
+      }
+      return response.json();
+    } catch (error) {
+      console.warn(`Failed to fetch metadata for ${eventTicker}:`, error);
+      return null;
+    }
+  }
+
+  // Fetch market candlesticks
+  static async getCandlesticks(params: {
+    market_tickers: string[];
+    start_ts: number;
+    end_ts: number;
+    period_interval: number;
+    include_latest_before_start?: boolean;
+  }) {
+    const searchParams = new URLSearchParams();
+    searchParams.append('market_tickers', params.market_tickers.join(','));
+    searchParams.append('start_ts', params.start_ts.toString());
+    searchParams.append('end_ts', params.end_ts.toString());
+    searchParams.append('period_interval', params.period_interval.toString());
+    if (params.include_latest_before_start !== undefined) {
+      searchParams.append('include_latest_before_start', params.include_latest_before_start.toString());
+    }
+    
+    const response = await fetch(`${BASE_URL}/markets/candlesticks?${searchParams.toString()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error('Failed to fetch candlesticks');
+    return response.json();
+  }
+
+  // Fetch market orderbook
+  static async getOrderbook(ticker: string, depth?: number) {
+    const searchParams = new URLSearchParams();
+    if (depth !== undefined) {
+      searchParams.append('depth', depth.toString());
+    }
+    
+    const response = await fetch(`${BASE_URL}/markets/${ticker}/orderbook?${searchParams.toString()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error('Failed to fetch orderbook');
+    return response.json();
   }
 }

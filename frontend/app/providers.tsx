@@ -1,8 +1,24 @@
 'use client';
 
 import { PrivyProvider } from '@privy-io/react-auth';
+import { usePathname } from 'next/navigation';
 import Appbar from '@/components/shared/appbar';
 import Bottombar from '@/components/shared/bottombar';
+
+function LayoutWrapper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isEventPage = pathname?.startsWith('/events/');
+
+  return (
+    <div suppressHydrationWarning>
+      {!isEventPage && <Appbar />}
+      <main className={`pb-24 scrollbar-hide ${!isEventPage ? 'pt-32' : ''}`}>
+        {children}
+      </main>
+      <Bottombar />
+    </div>
+  );
+}
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -34,13 +50,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         loginMethods: ['email', 'wallet', 'google', 'discord', 'github', 'twitter', 'sms', 'passkey'],
       }}
     >
-      <div suppressHydrationWarning>
-        <Appbar />
-        <main className="pt-32 pb-24 scrollbar-hide">
-          {children}
-        </main>
-        <Bottombar />
-      </div>
+      <LayoutWrapper>
+        {children}
+      </LayoutWrapper>
     </PrivyProvider>
   );
 }
