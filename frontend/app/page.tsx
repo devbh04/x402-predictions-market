@@ -60,37 +60,30 @@ export default function Home() {
 
   const showFilters = selectedBottomNav === 'explore';
 
-  // Batch fetch metadata for events
+  // Batch fetch metadata for events - lazy loading
   const fetchMetadataBatch = async (eventTickers: string[]) => {
-    const BATCH_SIZE = 10;
-    const batches = [];
+    // Only fetch first 10 to start, rest will load on-demand
+    const initialTickers = eventTickers.slice(0, 10);
     
-    for (let i = 0; i < eventTickers.length; i += BATCH_SIZE) {
-      batches.push(eventTickers.slice(i, i + BATCH_SIZE));
-    }
-
-    for (const batch of batches) {
-      await Promise.all(
-        batch.map(async (eventTicker) => {
-          // Skip if already loaded or loading
-          if (getMetadata(eventTicker) || isMetadataLoading(eventTicker)) return;
-          
-          setMetadataLoading(eventTicker, true);
-          try {
-            const metadata = await KalshiAPI.getEventMetadata(eventTicker);
-            if (metadata) {
-              setMetadata(eventTicker, metadata);
-            }
-          } catch (error) {
-            // Silently fail - metadata is optional
-            console.debug(`Metadata not available for ${eventTicker}`);
-          } finally {
-            setMetadataLoading(eventTicker, false);
-          }
-        })
-      );
-      // Small delay between batches to avoid overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100));
+    for (const eventTicker of initialTickers) {
+      // Skip if already loaded or loading
+      if (getMetadata(eventTicker) || isMetadataLoading(eventTicker)) continue;
+      
+      setMetadataLoading(eventTicker, true);
+      try {
+        const metadata = await KalshiAPI.getEventMetadata(eventTicker);
+        if (metadata) {
+          setMetadata(eventTicker, metadata);
+        }
+      } catch (error) {
+        // Silently fail - metadata is optional
+        console.debug(`Metadata not available for ${eventTicker}`);
+      } finally {
+        setMetadataLoading(eventTicker, false);
+      }
+      
+      // Longer delay between requests to respect rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   };
 
@@ -157,9 +150,11 @@ export default function Home() {
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
         
-        // Fetch metadata for visible events
+        // Fetch metadata for visible events in background (non-blocking)
         const eventTickers = sortedEvents.map(e => e.event_ticker);
-        fetchMetadataBatch(eventTickers);
+        fetchMetadataBatch(eventTickers).catch(err => 
+          console.debug('Metadata fetch failed:', err)
+        );
       } catch (err) {
         console.error('Error fetching events:', err);
         setError('Failed to load events. Please try again.');

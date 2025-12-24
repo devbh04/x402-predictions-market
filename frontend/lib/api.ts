@@ -81,10 +81,10 @@ export class KalshiAPI {
         return { events: [] };
       }
 
-      // Get first 100 series tickers
-      const seriesTickers = seriesResponse.series.slice(0, 100).map(s => s.ticker);
+      // Get first 20 series tickers (reduced to avoid rate limits)
+      const seriesTickers = seriesResponse.series.slice(0, 20).map(s => s.ticker);
       
-      // Fetch events for each series ticker and combine
+      // Fetch events for each series ticker sequentially with delays
       const allEvents: EventsResponse = { events: [] };
       
       for (const ticker of seriesTickers) {
@@ -102,6 +102,9 @@ export class KalshiAPI {
           allEvents.events = allEvents.events.slice(0, 100);
           break;
         }
+        
+        // Add delay between requests to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       return allEvents;
