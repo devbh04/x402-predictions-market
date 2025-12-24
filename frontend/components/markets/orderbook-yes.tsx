@@ -120,7 +120,7 @@ export default function OrderbookYes({ yesOrders, noOrders, lastPrice = 50 }: Or
                             <span className="text-red-400/50 text-[10px] uppercase">Total</span>
                         </div>
                     </div>
-                    <div ref={asksScrollRef} className="bg-red-500/5 max-h-[200px] overflow-auto">
+                    <div ref={asksScrollRef} className="bg-red-500/5 max-h-50 overflow-auto">
                         {asks.map((order, idx) => (
                             <OrderRow 
                                 key={`ask-${order.price}-${idx}`} 
@@ -154,7 +154,7 @@ export default function OrderbookYes({ yesOrders, noOrders, lastPrice = 50 }: Or
                             <span className="text-green-400/50 text-[10px] uppercase">Total</span>
                         </div>
                     </div>
-                    <div className="bg-green-500/5 max-h-[200px] overflow-auto">
+                    <div className="bg-green-500/5 max-h-50 overflow-auto">
                         {bids.map((order, idx) => (
                             <OrderRow 
                                 key={`bid-${order.price}-${idx}`} 
