@@ -87,6 +87,7 @@ export default function SocialPage() {
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [tempUsername, setTempUsername] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
+  const [sortBy, setSortBy] = useState<'recent' | 'upvotes'>('recent');
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostImage, setNewPostImage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -216,6 +217,14 @@ export default function SocialPage() {
     setReplyingTo({ postId, parentReplyId });
   }, []);
 
+  const sortedPosts = useCallback(() => {
+    const postsCopy = [...posts];
+    if (sortBy === 'upvotes') {
+      return postsCopy.sort((a, b) => b.upvotes - a.upvotes);
+    }
+    return postsCopy; // recent (default from API)
+  }, [posts, sortBy]);
+
   return (
     <div className="pb-24 px-4 max-w-4xl mx-auto">
       {/* Username Modal */}
@@ -276,6 +285,31 @@ export default function SocialPage() {
         </div>
       </motion.div>
 
+      {/* Sort Filter */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-white/60 text-sm">Sort by:</span>
+        <button
+          onClick={() => setSortBy('recent')}
+          className={`px-4 py-2 rounded text-sm transition-colors ${
+            sortBy === 'recent'
+              ? 'bg-yellow-400 text-black font-semibold'
+              : 'bg-zinc-800 text-white/70 hover:text-white'
+          }`}
+        >
+          Recent
+        </button>
+        <button
+          onClick={() => setSortBy('upvotes')}
+          className={`px-4 py-2 rounded text-sm transition-colors ${
+            sortBy === 'upvotes'
+              ? 'bg-yellow-400 text-black font-semibold'
+              : 'bg-zinc-800 text-white/70 hover:text-white'
+          }`}
+        >
+          Most Upvoted
+        </button>
+      </div>
+
       {/* Posts */}
       <div className="space-y-4">
         {loading ? (
@@ -283,7 +317,7 @@ export default function SocialPage() {
         ) : posts.length === 0 ? (
           <div className="text-center text-white/40 py-12">No posts yet. Be the first to post!</div>
         ) : (
-          posts.map((post, idx) => (
+          sortedPosts().map((post, idx) => (
             <motion.div
               key={post._id}
               initial={{ opacity: 0, y: 20 }}
