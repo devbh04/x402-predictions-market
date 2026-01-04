@@ -81,7 +81,33 @@ export function useX402Wallet(): UseX402WalletResult {
       const newWallet = await createAppWallet(user.id);
       setWallet(newWallet);
       
-      // Get initial balance
+      // Request funds from faucet via our API route
+      console.log('[x402] Requesting funds from faucet for', newWallet.address);
+      try {
+        const faucetResponse = await fetch('/api/faucet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            address: newWallet.address,
+          }),
+        });
+
+        if (faucetResponse.ok) {
+          console.log('[x402] Faucet request successful');
+          // Wait a bit for the transaction to be processed
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          const errorData = await faucetResponse.json();
+          console.warn('[x402] Faucet request failed:', errorData);
+        }
+      } catch (faucetError) {
+        console.warn('[x402] Failed to request from faucet:', faucetError);
+        // Don't fail wallet creation if faucet fails
+      }
+      
+      // Get initial balance (after faucet attempt)
       const bal = await getAppWalletBalance(newWallet.address);
       setBalance(bal);
       

@@ -467,8 +467,11 @@ export default function WalletPage() {
                     <h3 className="text-yellow-400 font-semibold mb-2">
                       Creating Your Micropayments Wallet...
                     </h3>
-                    <p className="text-gray-300 text-sm">
+                    <p className="text-gray-300 text-sm mb-2">
                       Setting up your x402 wallet for secure micropayments.
+                    </p>
+                    <p className="text-gray-400 text-xs">
+                      💰 Auto-funding from testnet faucet...
                     </p>
                   </div>
                 ) : x402Error ? (
